@@ -1,0 +1,61 @@
+# ========================
+# Python / Django
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Database lokal (jangan pernah commit ini)
+*.sqlite3
+*.db
+
+# File environment (RAHASIA — jangan commit!)
+.env
+.env.local
+.env.*.local
+
+# Log
+*.log
+logs/
+
+# ========================
+# Node.js / Next.js
+# ========================
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# ========================
+# Docker
+# ========================
+# Tidak ada yang perlu di-ignore untuk Docker
+
+# ========================
+# IDE & Editor
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ========================
+# Coverage & Testing
+# ========================
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/

@@ -1,0 +1,173 @@
+# Versi format docker-compose (3.9 adalah yang stabil dan banyak didukung)
+
+
+services:
+  # ========================
+  # DATABASE: PostgreSQL
+  # ========================
+  db:
+    image: postgres:16-alpine      # Alpine = versi ringan
+    container_name: magang_db
+    restart: unless-stopped        # Restart otomatis kecuali di-stop manual
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Data PostgreSQL disimpan di volume supaya tidak hilang saat container restart
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Buka port 5432 supaya bisa diakses dari luar container (untuk debugging)
+      - "5432:5432"
+    healthcheck:
+      # Cek apakah PostgreSQL sudah siap sebelum service lain jalan
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========================
+  # CACHE & MESSAGE BROKER: Redis
+  # ========================
+  redis:
+    image: redis:7-alpine
+    container_name: magang_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========================
+  # BACKEND: Django
+  # ========================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: magang_backend
+    restart: unless-stopped
+    # Tunggu db dan redis siap dulu sebelum backend jalan
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Baca dari file .env di root project
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: ${DJANGO_DEBUG}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db          # Nama service PostgreSQL di atas
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      REDIS_URL: ${REDIS_URL}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+    volumes:
+      # Mount kode lokal ke container — perubahan kode langsung keliatan
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python manage.py makemigrations users &&
+            python manage.py makemigrations internships &&
+            python manage.py makemigrations scraper &&
+            python manage.py migrate &&
+            python manage.py runserver 0.0.0.0:8000"
+
+  # ========================
+  # TASK WORKER: Celery
+  # ========================
+  celery_worker:
+    # Pakai image yang sama dengan backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: magang_celery_worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      REDIS_URL: ${REDIS_URL}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+    volumes:
+      - ./backend:/app
+    # Jalankan Celery worker, bukan Django server
+    command: celery -A config worker --loglevel=info --concurrency=2
+
+  # ========================
+  # SCHEDULER: Celery Beat
+  # (Yang jadwalkan scraping otomatis setiap beberapa jam)
+  # ========================
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: magang_celery_beat
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      REDIS_URL: ${REDIS_URL}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+    volumes:
+      - ./backend:/app
+    command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+  # ========================
+  # FRONTEND: Next.js
+  # ========================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: magang_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    volumes:
+      - ./frontend:/app
+      # Jangan mount node_modules dari host ke container
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+
+# ========================
+# VOLUMES (Penyimpanan persisten)
+# ========================
+volumes:
+  postgres_data:    # Data PostgreSQL
+  redis_data:       # Data Redis
