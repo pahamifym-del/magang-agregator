@@ -44,3 +44,4 @@ sentry-sdk[django]==2.10.0
 django-filter==24.2
 playwright-stealth==1.0.6
 setuptools>=70.0.0
+dj-database-url==2.1.0

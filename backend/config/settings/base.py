@@ -5,7 +5,7 @@ Settings inti Django — berlaku untuk semua environment.
 import os
 from pathlib import Path
 from celery.schedules import crontab
-
+import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # ========================
@@ -90,20 +90,21 @@ TEMPLATES = [
 # ========================
 # DATABASE
 # ========================
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("POSTGRES_DB"),
-        "USER": os.environ.get("POSTGRES_USER"),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
-        "HOST": os.environ.get("POSTGRES_HOST", "db"),
-        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
-        "OPTIONS": {
-            "connect_timeout": 10,
-        },
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL:
+    DATABASES = {"default": dj_database_url.parse(DATABASE_URL)}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("POSTGRES_DB"),
+            "USER": os.environ.get("POSTGRES_USER"),
+            "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
+            "HOST": os.environ.get("POSTGRES_HOST", "db"),
+            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+            "OPTIONS": {"connect_timeout": 10},
+        }
     }
-}
-
 # ========================
 # PASSWORD VALIDATION
 # ========================
