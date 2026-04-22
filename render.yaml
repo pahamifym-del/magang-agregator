@@ -1,0 +1,159 @@
+services:
+  # Backend Django
+  - type: web
+    name: magang-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "*"
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: magang-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: magang-db
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: magang-db
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: magang-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: magang-db
+          property: password
+      - key: REDIS_URL
+        fromService:
+          name: magang-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: magang-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: magang-redis
+          type: redis
+          property: connectionString
+
+  # Celery Worker
+  - type: worker
+    name: magang-celery-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    startCommand: celery -A config worker --loglevel=info --concurrency=2
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: magang-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: magang-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: magang-db
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: magang-db
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: magang-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: magang-db
+          property: password
+      - key: REDIS_URL
+        fromService:
+          name: magang-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: magang-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: magang-redis
+          type: redis
+          property: connectionString
+
+  # Celery Beat
+  - type: worker
+    name: magang-celery-beat
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    startCommand: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: magang-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: magang-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: magang-db
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: magang-db
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: magang-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: magang-db
+          property: password
+      - key: REDIS_URL
+        fromService:
+          name: magang-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: magang-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: magang-redis
+          type: redis
+          property: connectionString
+
+databases:
+  - name: magang-db
+    plan: free
+    databaseName: magang_agregator
+    user: postgres

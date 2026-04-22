@@ -2,19 +2,14 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-# Beritahu Playwright untuk simpan browser di folder yang jelas
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 
-# Install dependensi sistem untuk Playwright + PostgreSQL
-# Kita install manual supaya tidak bergantung pada playwright install-deps
-# yang bermasalah di Debian terbaru
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     curl \
-    # Dependensi Chromium
     libnss3 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -31,15 +26,27 @@ RUN apt-get update && apt-get install -y \
     libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dan install Python dependencies
 COPY requirements/ requirements/
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements/development.txt
 
-# Install hanya browser Chromium (tanpa install-deps karena sudah manual di atas)
+# Dengan ini:
+ARG ENVIRONMENT=production
+RUN pip install --no-cache-dir --upgrade pip && \
+    if [ "$ENVIRONMENT" = "development" ]; then \
+        pip install --no-cache-dir -r requirements/development.txt; \
+    else \
+        pip install --no-cache-dir -r requirements/production.txt; \
+    fi
+
+# Patch playwright_stealth
+RUN python -c "\
+path = '/usr/local/lib/python3.12/site-packages/playwright_stealth/stealth.py'; \
+f = open(path); content = f.read(); f.close(); \
+content = content.replace('import pkg_resources', 'import importlib.resources as _ir\nclass _FPR:\n    def resource_string(self, p, r):\n        return _ir.files(p).joinpath(r).read_bytes()\npkg_resources = _FPR()'); \
+f = open(path, \"w\"); f.write(content); f.close(); \
+print('playwright_stealth patched!')"
+
 RUN python -m playwright install chromium
 
-# Copy semua kode
 COPY . .
 
 EXPOSE 8000
